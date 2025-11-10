@@ -20,8 +20,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Triggering Child Repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CHILD_REPO }}
+          token: ${{ secrets.CHILD_REPO_TOKEN }}
+          path: mule-app
 
       - name: Setup Java Environment
         uses: actions/setup-java@v4
@@ -193,7 +197,7 @@ jobs:
 
             MuleSoft Automated Deployment Summary
 
-            ▪ Application: cc-pipeline-auto-v1  
+            ▪ Application: ${{ env.APP_NAME }}
             ▪ Environment: Sandbox  
             ▪ Status: ${{ job.status }}  
             ▪ Triggered by: ${{ github.actor }}
