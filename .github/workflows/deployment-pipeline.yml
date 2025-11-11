@@ -14,46 +14,44 @@ env:
 jobs:
 
   # RUN MUNIT TESTS
+  test:
+    name: "Run MUnit Tests"
+    runs-on: ubuntu-latest
 
- test:
-  name: "Run MUnit Tests"
-  runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Triggering Child Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CHILD_REPO }}
+          token: ${{ secrets.CHILD_REPO_TOKEN }}
+          path: mule-app
 
-  steps:
-    - name: Checkout Triggering Child Repository
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ env.CHILD_REPO }}
-        token: ${{ secrets.CHILD_REPO_TOKEN }}
-        path: mule-app
+      - name: Setup Java Environment
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
 
-    - name: Setup Java Environment
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: ${{ env.JAVA_VERSION }}
+      - name: Cache Maven Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: test-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
 
-    - name: Cache Maven Dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2
-        key: test-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
-        restore-keys: ${{ runner.os }}-maven-
+      - name: Run MUnit Tests
+        working-directory: mule-app
+        run: |
+          mvn clean test -D"mule.env"="Sandbox" -D"mule.key"="${{ secrets.SANDBOX_MULE_KEY }}"
 
-    - name: Run MUnit Tests
-      working-directory: mule-app   
-      run: |
-        mvn clean test -D"mule.env"="Sandbox" -D"mule.key"="${{ secrets.SANDBOX_MULE_KEY }}"
-
-    - name: Upload MUnit Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: "munit-report"
-        path: mule-app/target/site/munit/coverage  
-        retention-days: 2
+      - name: Upload MUnit Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: "munit-report"
+          path: mule-app/target/site/munit/coverage
+          retention-days: 2
 
   # BUILD APPLICATION
-
   build:
     name: "Build Mule Application"
     runs-on: ubuntu-latest
@@ -81,17 +79,17 @@ jobs:
           restore-keys: ${{ runner.os }}-maven-
 
       - name: Package Mule Application
+        working-directory: mule-app
         run: mvn -B package -DskipTests
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: "mule-artifact"
-          path: target/*.jar
+          path: mule-app/target/*.jar
           retention-days: 2
 
-  # PUBLISH TO EXCHANGE        
-
+  # PUBLISH TO EXCHANGE
   publish:
     name: "Publish to Anypoint Exchange"
     runs-on: ubuntu-latest
@@ -124,14 +122,14 @@ jobs:
           name: "mule-artifact"
 
       - name: Publish Artifact to Exchange
+        working-directory: mule-app
         env:
-          CLIENT_ID: ${{ secrets.connected_app_id }}
-          CLIENT_SECRET: ${{ secrets.connected_app_secret }}
+          CLIENT_ID: ${{ secrets.CONNECTED_APP_ID }}
+          CLIENT_SECRET: ${{ secrets.CONNECTED_APP_SECRET }}
         run: |
           mvn clean deploy -DskipTests -DclientID=$CLIENT_ID -DclientSecret=$CLIENT_SECRET -s settings.xml
 
   # DEPLOY JOB
-
   deploy:
     name: "Deploy to CloudHub 2.0"
     runs-on: ubuntu-latest
@@ -167,15 +165,14 @@ jobs:
           name: "mule-artifact"
 
       - name: "Deploy to CloudHub 2.0 (Environment Specific)"
+        working-directory: mule-app
         env:
           CLIENT_ID: ${{ secrets.CONNECTED_APP_ID }}
           CLIENT_SECRET: ${{ secrets.CONNECTED_APP_SECRET }}
         run: |
           mvn clean deploy -DmuleDeploy -DskipTests -DclientID=$CLIENT_ID -DclientSecret=$CLIENT_SECRET -D"mule.key"="${{ secrets.SANDBOX_MULE_KEY }}" -s settings.xml
 
-
   # EMAIL NOTIFICATION
-
   notify:
     name: "Send Deployment Status Email"
     runs-on: ubuntu-latest
